@@ -93,7 +93,7 @@ For each decorated implementation, the generator:
 1. Registers the undecorated implementation as a keyed service
 2. Registers a factory that resolves the keyed service and wraps it with decorators
 3. Decorators are applied in ascending order (innermost to outermost)
-4. Open generic decorators are closed at runtime via `MakeGenericType`
+4. Open generic decorators are closed by the generator at compile time (positionally, against the registration's own closed service type arguments) and emitted as a literal, closed `typeof(...)` — no runtime `MakeGenericType`/reflection-based generic closing, which keeps generated code Native AOT/trim-analyzer clean
 
 ## Testing Approach
 

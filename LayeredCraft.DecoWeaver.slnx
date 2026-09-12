@@ -14,6 +14,7 @@
     <File Path="docs\advanced\source-generators.md" />
     <File Path="docs\advanced\testing.md" />
     <File Path="docs\advanced\keyed-services.md" />
+    <File Path="docs\advanced\native-aot.md" />
     <File Path="docs\advanced\performance.md" />
     <File Path="docs\advanced\troubleshooting.md" />
   </Folder>
@@ -60,6 +61,7 @@
     <File Path=".github\workflows\dependabot-auto-merge.yml" />
     <File Path=".github\workflows\pr-build.yaml" />
     <File Path=".github\workflows\docs.yml" />
+    <File Path=".github\workflows\native-aot-validation.yaml" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples\DecoWeaver.Sample\DecoWeaver.Sample.csproj" />
@@ -75,5 +77,6 @@
   </Folder>
   <Folder Name="/test/">
     <Project Path="test\LayeredCraft.DecoWeaver.Generator.Tests\LayeredCraft.DecoWeaver.Generator.Tests.csproj" />
+    <Project Path="test\LayeredCraft.DecoWeaver.AotValidation\LayeredCraft.DecoWeaver.AotValidation.csproj" />
   </Folder>
 </Solution>

@@ -628,4 +628,30 @@ public class DecoWeaverGeneratorTests
             featureFlags: FeatureFlags);
     }
 
+    [Theory]
+    [GeneratorAutoData]
+    public void GeneratedCode_NeverUsesReflectionBasedDecoratorConstruction(DecoWeaverGenerator sut)
+    {
+        // Regression test for issue #61 (Native AOT/trim warnings IL2055/IL3050/IL2072): decorator
+        // construction must be a direct, literal `typeof(ClosedDecoratorType)` passed straight to
+        // ActivatorUtilities.CreateInstance, never a runtime-closed Type via MakeGenericType /
+        // the old DecoratorFactory.CloseIfNeeded helper. Exercises the open-generic-decorator-over
+        // -closed-registration shape, the exact scenario reported in the issue.
+        var (driver, _, _) = GeneratorTestHelpers.RunFromCases(sut,
+            [
+                "Cases/002_OpenGeneric_MultipleOrdered/Repository.cs",
+                "Cases/002_OpenGeneric_MultipleOrdered/Program.cs"
+            ],
+            featureFlags: FeatureFlags);
+
+        var generated = driver.GetRunResult().GeneratedTrees
+            .Single(t => t.FilePath.EndsWith("ClosedGenerics.g.cs"))
+            .GetText().ToString();
+
+        generated.Should().NotContain("MakeGenericType");
+        generated.Should().NotContain("DecoratorFactory");
+        generated.Should().NotContain("CloseIfNeeded");
+        generated.Should().Contain("ActivatorUtilities.CreateInstance");
+    }
+
 }

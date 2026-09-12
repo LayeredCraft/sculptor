@@ -49,6 +49,9 @@
         <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
         <None Include="..\LayeredCraft.DecoWeaver.Attributes\bin\$(Configuration)\netstandard2.0\LayeredCraft.DecoWeaver.Attributes.dll" Pack="true" PackagePath="lib/netstandard2.0" Visible="true" />
         <None Include="..\LayeredCraft.DecoWeaver.Attributes\bin\$(Configuration)\netstandard2.0\LayeredCraft.DecoWeaver.Attributes.xml" Pack="true" PackagePath="lib/netstandard2.0" Visible="false" />
+        <!-- net8.0 asset carries a real, tool-enforced IsAotCompatible claim for net8.0+ consumers -->
+        <None Include="..\LayeredCraft.DecoWeaver.Attributes\bin\$(Configuration)\net8.0\LayeredCraft.DecoWeaver.Attributes.dll" Pack="true" PackagePath="lib/net8.0" Visible="true" />
+        <None Include="..\LayeredCraft.DecoWeaver.Attributes\bin\$(Configuration)\net8.0\LayeredCraft.DecoWeaver.Attributes.xml" Pack="true" PackagePath="lib/net8.0" Visible="false" />
         <None Include="LayeredCraft.DecoWeaver.props" Pack="true" PackagePath="build" />
         <None Include="LayeredCraft.DecoWeaver.targets" Pack="true" PackagePath="build" />
     </ItemGroup>

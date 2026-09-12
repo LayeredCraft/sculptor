@@ -119,6 +119,7 @@ nav:
   - Advanced:
     - Interceptors: advanced/interceptors.md
     - Keyed Services: advanced/keyed-services.md
+    - Native AOT: advanced/native-aot.md
     - Performance: advanced/performance.md
     - Troubleshooting: advanced/troubleshooting.md
   - API Reference:

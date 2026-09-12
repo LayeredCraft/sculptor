@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <InterceptorsPreviewNamespaces>LayeredCraft.DecoWeaver.Generated</InterceptorsPreviewNamespaces>
+        <InterceptorsNamespaces>LayeredCraft.DecoWeaver.Generated</InterceptorsNamespaces>
+        <IsPackable>false</IsPackable>
+        <LangVersion>Preview</LangVersion>
+
+        <!-- The whole point of this project: prove DecoWeaver's generated decorator-composition code
+             is genuinely Native AOT compatible, not just analyzer-clean. See CLAUDE.md / research/2026-09-11-native-aot-compatibility.md. -->
+        <PublishAot>true</PublishAot>
+        <IsAotCompatible>true</IsAotCompatible>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Root this assembly so the AOT/trim analyzers evaluate every reachable member,
+             including everything DecoWeaver's generator emits into it. -->
+        <TrimmerRootAssembly Include="LayeredCraft.DecoWeaver.AotValidation" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\LayeredCraft.DecoWeaver.Attributes\LayeredCraft.DecoWeaver.Attributes.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
+        <ProjectReference Include="..\..\src\LayeredCraft.DecoWeaver.Generators\LayeredCraft.DecoWeaver.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+        <PackageReference Remove="Microsoft.SourceLink.GitHub" />
+    </ItemGroup>
+
+    <!-- Only write generated files to disk in Debug builds (nice for inspection) -->
+    <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    </PropertyGroup>
+
+</Project>
