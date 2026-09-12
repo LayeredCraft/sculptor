@@ -32,9 +32,12 @@ Decorator construction itself still runs through [`ActivatorUtilities.CreateInst
 
 ## Supported Target Frameworks
 
-Native AOT compatibility applies to the code DecoWeaver's generator emits into *your* project, which follows your own application's target framework and AOT settings. `LayeredCraft.DecoWeaver.Attributes` (the small package defining `[DecoratedBy]` and friends) targets `netstandard2.0` and `net8.0`, and declares `IsAotCompatible` on `net8.0`+.
+Native AOT compatibility applies to the code DecoWeaver's generator emits into *your* project, which follows your own application's target framework and AOT settings — not to a package-level flag on DecoWeaver's own assemblies:
 
-`LayeredCraft.DecoWeaver` (the source generator itself) targets `netstandard2.0` and runs inside the Roslyn compiler host during your build — it is never part of your published application and has no bearing on your app's own AOT compatibility.
+- `LayeredCraft.DecoWeaver` (the source generator) targets `netstandard2.0` and runs inside the Roslyn compiler host during your build. It is never part of your published application and has no bearing on your app's own AOT compatibility.
+- `LayeredCraft.DecoWeaver.Attributes` (the small package defining `[DecoratedBy]` and friends) also targets `netstandard2.0`. It contains only marker attribute classes with no logic — there is no generated runtime implementation here for `IsAotCompatible` to meaningfully certify, so neither assembly declares it.
+
+DecoWeaver's actual Native AOT compatibility claim is backed by continuous validation of the *generated* code — see below — not by an MSBuild property on either package.
 
 ## Limitations
 

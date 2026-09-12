@@ -139,6 +139,8 @@ This resolves all three reported warnings (`IL2055`, `IL3050`, `IL2072`) by elim
 
 ## 8. `IsAotCompatible` recommendation
 
+> **Superseded 2026-09-12 — see §14.** The `net8.0` multi-target and `IsAotCompatible` for `Attributes` described below were implemented, then reverted after PR review and a CI failure showed the assurance it provided wasn't worth the packaging complexity it introduced. `Attributes` stays `netstandard2.0`-only. The reasoning below is kept as the historical record of what was tried and why it didn't hold up in practice — see §14 for the corrected conclusion.
+
 **Decision (user, 2026-09-11 — supersedes the earlier "multi-target both projects" call):** the two shipped projects have fundamentally different runtime presence, so they're evaluated and targeted independently.
 
 ### `LayeredCraft.DecoWeaver.Generators` — stays `netstandard2.0` only
@@ -210,3 +212,36 @@ No public API change, no dropped capability, and no JIT-only carve-out were foun
 ## 13. ADR?
 
 **Not recommended.** The fix is a generator-emission change (how the compiler emits already-known information) with no durable architectural decision a future maintainer needs a record of — it doesn't change the public API, the pipeline's data model in any consumer-visible way, or a load-bearing tradeoff future work must respect. It's documented sufficiently by this research doc plus normal PR history. Revisit only if implementation surfaces a genuine tradeoff (e.g., if plumbing type arguments through `TypeDefId`-shaped caching keys turns out to threaten incremental-generator cache-hit rates in a way that needs a durable rationale).
+
+## 14. Implementation review correction (2026-09-12)
+
+PR #62 (implementing this research) was reviewed before merge. Two independent findings led to a correction of §8's package-targeting decision.
+
+### Finding 1 — reviewer packaging concern
+
+A PR review comment (`chatgpt-codex-connector`, on `LayeredCraft.DecoWeaver.Generators.csproj` line 53) identified that packing `Generators` from a clean checkout only builds the `netstandard2.0` target of the `Attributes` ProjectReference (since `Generators` itself targets `netstandard2.0`, and MSBuild only builds the TFM(s) actually needed by the referencing project's own resolution graph). The newly added `lib/net8.0` pack item referenced a `bin/$(Configuration)/net8.0/...` path that a plain `dotnet pack` on `Generators` alone never populates — packing would either fail on the missing file or silently omit the advertised net8.0/AOT-compatible asset, depending on MSBuild target ordering. **Reproduced independently**: `dotnet pack src/LayeredCraft.DecoWeaver.Generators/LayeredCraft.DecoWeaver.Generators.csproj -c Release` on a clean checkout, before the fix in this section, would have needed an explicit cross-project build dependency to populate that path reliably — exactly the "additional MSBuild complexity merely to preserve the `net8.0` asset" the correcting instructions warned against introducing.
+
+### Finding 2 — the actual CI failure (unrelated root cause)
+
+The new `native-aot-validation.yaml` workflow failed in CI, but **not** at the publish step and **not** for a packaging reason. The publish succeeded, zero `IL2xxx`/`IL3xxx` warnings, native binary produced and executed — but every one of the 7 scenarios returned the *undecorated* value (e.g. `Greet()` returned `"hello"` instead of `"HELLO"`), meaning `DecoWeaverGenerator` emitted **no interceptors at all** in that build.
+
+Root cause, found in the publish log itself:
+
+```
+CSC : warning CS9057: Analyzer assembly '.../LayeredCraft.DecoWeaver.dll' cannot be used because it
+references version '5.9.0.0' of the compiler, which is newer than the currently running version '5.7.0.0'.
+```
+
+`Generators.csproj` references `Microsoft.CodeAnalysis.CSharp 5.9.0` (bumped there by a sequence of prior Dependabot PRs — confirmed via `git log -p` on the csproj: `4.14.0 → 5.0.0 → 5.6.0 → 5.9.0`). `global.json` was still pinned to `11.0.100-preview.3.26207.106`, an SDK build whose bundled Roslyn compiler (`5.7.0`) predates that. GitHub's `actions/setup-dotnet` installs *exactly* the SDK version named in `global.json` (it does not roll forward during installation), so CI ran with a compiler older than what the analyzer assembly requires — the compiler host refused to load `DecoWeaverGenerator` at all, silently, as a warning rather than a build error. Every registration therefore fell through to its plain, undecorated `AddScoped`/`AddSingleton`/etc. call — which is exactly the symptom observed.
+
+This was **latent and pre-existing**, not introduced by this PR's `Attributes` targeting change: no prior CI job ever loaded `Generators` as a real analyzer through `csc` and then asserted on the *executed, decorated* behavior. The existing generator test suite instantiates `DecoWeaverGenerator` directly in-process (`GeneratorDriver.RunGenerators`), bypassing `csc`'s analyzer-version gate entirely, so it could never have caught this. The new Native AOT validation workflow — specifically its behavioral assertion after execution, not its AOT/trim analyzer or publish step — is what surfaced it.
+
+**Finding 1 and Finding 2 are unrelated.** Reverting the `Attributes` `net8.0` target does not touch `Generators`' `Microsoft.CodeAnalysis.CSharp` reference or `global.json`'s SDK pin, and would not have fixed the CI failure on its own.
+
+### Corrected conclusion
+
+- **`LayeredCraft.DecoWeaver.Attributes` reverts to `netstandard2.0`-only.** No `IsAotCompatible`. The `net8.0` multi-target was true but the assurance it added was thin: `IsAotCompatible` only certifies "this specific assembly builds clean under the trim/AOT analyzers for this TFM" — it says nothing about the assembly actually functioning correctly inside a *published, executed* Native AOT binary (the gap this whole effort exists to close for the generator's own output), and `Attributes` contains no logic to certify in the first place (five `[Conditional]`-guarded, no-op-at-runtime marker classes). The meaningful, load-bearing Native AOT proof for DecoWeaver as a whole is §7's validator: a real consumer project, real generated decorator code, real `PublishAot=true`, real executed native binary, real behavioral assertions. A package-level flag on a metadata-only assembly added packaging surface (the reviewer's finding) without adding to that proof.
+- **`LayeredCraft.DecoWeaver.Generators` stays `netstandard2.0`-only, unchanged from §8's original conclusion** — still correct, not touched by this correction.
+- **`Generators.csproj`'s `lib/net8.0` pack items are removed** — no longer needed once `Attributes` has only one TFM to pack.
+- **`global.json`'s pinned SDK is bumped to `11.0.100-rc.1.26425.128`** (confirmed publicly downloadable and installable by `actions/setup-dotnet`; bundles a Roslyn compiler ≥5.9.0, matching `Generators`' own dependency). This is the actual fix for the CI failure — independent of the `Attributes` reversion — and closes the latent gap that let a version-mismatched, silently-unloaded analyzer go undetected in every prior CI run.
+- **Wording correction**: `IsAotCompatible` must not be described as certifying that a package is "Native AOT safe" in any absolute sense — it is a build-time analyzer-cleanliness signal for one assembly at one TFM, nothing more. DecoWeaver's actual Native AOT compatibility claim rests on the executed validator (§7), not on any MSBuild property.

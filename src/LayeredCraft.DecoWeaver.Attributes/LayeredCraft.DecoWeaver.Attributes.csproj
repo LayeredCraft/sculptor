@@ -4,15 +4,11 @@
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
         <LangVersion>default</LangVersion>
-        <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+        <TargetFramework>netstandard2.0</TargetFramework>
         <PackageId>LayeredCraft.DecoWeaver.Attributes</PackageId>
         <AssemblyName>$(PackageId)</AssemblyName>
         <RootNamespace>$(PackageId)</RootNamespace>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <!-- Real runtime dependency in consumer apps (packed to lib/, not analyzers/) - net8.0+ carries a
-             genuine, tool-enforced Native AOT compatibility claim. netstandard2.0 predates the AOT/trim
-             analyzers, so the flag is conditioned per current Microsoft Native AOT library guidance. -->
-        <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Polyfill" Version="10.11.2">
