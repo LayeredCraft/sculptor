@@ -1,0 +1,55 @@
+name: Native AOT Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+# Deliberately no path filter: changes anywhere in the repo can affect the Native AOT result —
+# SDK/global.json pin, package versions, csproj/build configuration, workflow config, or the
+# generator/test infrastructure itself — not just src/** or the validation project. A regression
+# should never be able to bypass this gate by landing outside those two directories.
+
+permissions:
+  contents: read
+
+jobs:
+  native-aot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Required by the Native AOT compiler toolchain on Linux.
+      # https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites
+      - name: Install Native AOT build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish Native AOT validation app
+        id: publish
+        run: |
+          set -o pipefail
+          dotnet publish test/LayeredCraft.DecoWeaver.AotValidation/LayeredCraft.DecoWeaver.AotValidation.csproj \
+            -c Release -r linux-x64 --self-contained \
+            2>&1 | tee publish.log
+
+      - name: Fail on any IL2xxx/IL3xxx trim or AOT warning
+        run: |
+          if grep -qE '\bIL[23][0-9]{3}\b' publish.log; then
+            echo "::error::Native AOT/trim warnings found in publish output:"
+            grep -E '\bIL[23][0-9]{3}\b' publish.log
+            exit 1
+          fi
+          echo "No IL2xxx/IL3xxx warnings found."
+
+      - name: Execute the published native binary
+        run: |
+          BIN=test/LayeredCraft.DecoWeaver.AotValidation/bin/Release/net10.0/linux-x64/publish/LayeredCraft.DecoWeaver.AotValidation
+          file "$BIN"
+          "$BIN"

@@ -1,4 +1,5 @@
 ﻿using LayeredCraft.DecoWeaver.Model;
+using LayeredCraft.DecoWeaver.Util;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -35,7 +36,13 @@ internal readonly record struct ClosedGenericRegistration(
     RegistrationKind Kind = RegistrationKind.Parameterless,
     string? FactoryParameterName = null, // Parameter name from the original registration (e.g., "implementationFactory")
     string? ServiceKeyParameterName = null, // Parameter name for keyed services (e.g., "serviceKey")
-    string? InstanceParameterName = null // Parameter name for instance registrations (e.g., "implementationInstance")
+    string? InstanceParameterName = null, // Parameter name for instance registrations (e.g., "implementationInstance")
+    // Fully qualified type argument names of the closed service type, in declaration order
+    // (empty if the service isn't generic). Lets the emitter close open-generic decorator type
+    // definitions (e.g. CachingRepository<>) at generation time instead of via runtime
+    // Type.MakeGenericType, since DecoWeaver only ever discovers closed generic service
+    // registrations, so this argument list is always fully known here.
+    EquatableArray<string> ServiceTypeArgFqns = default
 );
 
 internal readonly record struct RegistrationValidationResult(
@@ -102,6 +109,15 @@ internal static class ClosedGenericRegistrationProvider
         var serviceFqn = svc.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var implFqn = impl.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
+        // Capture the service's own closed type arguments so open-generic decorators can be
+        // closed at generation time (positionally, matching how runtime MakeGenericType(serviceType
+        // .GetGenericArguments()) would have closed them) instead of via runtime reflection.
+        var serviceTypeArgFqns = svc.TypeArguments.Length > 0
+            ? new EquatableArray<string>(svc.TypeArguments
+                .Select(a => a.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .ToArray())
+            : default;
+
         return new ClosedGenericRegistration(
             ServiceDef: TypeId.Create(svc).Definition,
             ImplDef: TypeId.Create(impl).Definition,
@@ -112,7 +128,8 @@ internal static class ClosedGenericRegistrationProvider
             Kind: validationResult.Value.Kind,
             FactoryParameterName: validationResult.Value.FactoryParameterName,
             ServiceKeyParameterName: validationResult.Value.ServiceKeyParameterName,
-            InstanceParameterName: validationResult.Value.InstanceParameterName
+            InstanceParameterName: validationResult.Value.InstanceParameterName,
+            ServiceTypeArgFqns: serviceTypeArgFqns
         );
     }
 

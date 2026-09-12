@@ -72,15 +72,15 @@ public class CachingRepository<T> : IRepository<T> where T : class
     }
 }
 
-// Apply with empty angle brackets
-[DecoratedBy<CachingRepository<>>]
+// Apply using typeof() with empty angle brackets
+[DecoratedBy(typeof(CachingRepository<>))]
 public class Repository<T> : IRepository<T> where T : class
 {
     // Implementation
 }
 ```
 
-**Important**: Use `<>` (empty angle brackets) to indicate an open generic decorator.
+**Important**: Use `typeof(Decorator<>)` with empty angle brackets to indicate an open generic decorator. The generic attribute form (`[DecoratedBy<CachingRepository<>>]`) cannot be used here — C# does not allow an unbound generic type as a type argument to another generic type outside of `typeof()`.
 
 ## Registration
 
@@ -150,7 +150,7 @@ public class Repository<T> : IRepository<T>
 }
 
 // ✅ Decorator matches constraint
-[DecoratedBy<CachingRepository<>>]
+[DecoratedBy(typeof(CachingRepository<>))]
 public class CachingRepository<T> : IRepository<T>
     where T : class, IEntity
 {
@@ -192,7 +192,7 @@ public class CachingKeyValueStore<TKey, TValue> : IKeyValueStore<TKey, TValue>
     // Implementation
 }
 
-[DecoratedBy<CachingKeyValueStore<,>>]  // Note: comma for second parameter
+[DecoratedBy(typeof(CachingKeyValueStore<,>))]  // Note: comma for second parameter
 public class KeyValueStore<TKey, TValue> : IKeyValueStore<TKey, TValue>
 {
     // Implementation
@@ -230,7 +230,7 @@ public class CachingRepository<T> : IRepository<T> where T : class
     }
 }
 
-[DecoratedBy<CachingRepository<>>]
+[DecoratedBy(typeof(CachingRepository<>))]
 public class Repository<T> : IRepository<T> where T : class
 {
     // Implementation
@@ -242,9 +242,9 @@ public class Repository<T> : IRepository<T> where T : class
 Stack multiple open generic decorators:
 
 ```csharp
-[DecoratedBy<LoggingRepository<>>(Order = 1)]
-[DecoratedBy<CachingRepository<>>(Order = 2)]
-[DecoratedBy<MetricsRepository<>>(Order = 3)]
+[DecoratedBy(typeof(LoggingRepository<>), Order = 1)]
+[DecoratedBy(typeof(CachingRepository<>), Order = 2)]
+[DecoratedBy(typeof(MetricsRepository<>), Order = 3)]
 public class Repository<T> : IRepository<T> where T : class
 {
     // Implementation
@@ -283,11 +283,11 @@ public class AuditedUserRepository : IRepository<User>
 }
 
 // Generic implementation
-[DecoratedBy<CachingRepository<>>]
+[DecoratedBy(typeof(CachingRepository<>))]
 public class Repository<T> : IRepository<T> where T : class { }
 
 // User-specific implementation gets both decorators
-[DecoratedBy<CachingRepository<>>]
+[DecoratedBy(typeof(CachingRepository<>))]
 [DecoratedBy<AuditedUserRepository>]
 public class UserRepository : Repository<User>
 {
@@ -325,7 +325,7 @@ public class ValidationRepository<T> : IRepository<T>
     }
 }
 
-[DecoratedBy<ValidationRepository<>>]
+[DecoratedBy(typeof(ValidationRepository<>))]
 public class Repository<T> : IRepository<T>
     where T : class, IValidatable
 {
@@ -404,19 +404,20 @@ For open generic decorators, DecoWeaver generates interceptors that:
        // Get the undecorated implementation
        var impl = sp.GetRequiredKeyedService<IRepository<User>>(key);
 
-       // Close the open generic decorator at runtime: CachingRepository<> → CachingRepository<User>
-       var decoratorType = typeof(CachingRepository<>).MakeGenericType(typeof(User));
-
-       // Resolve decorator dependencies and construct
-       var cache = sp.GetRequiredService<IMemoryCache>();
-       return (IRepository<User>)Activator.CreateInstance(decoratorType, impl, cache);
+       // The open generic decorator is already closed by the generator, at compile time:
+       // CachingRepository<> becomes CachingRepository<User> directly in the emitted source
+       // (no runtime Type.MakeGenericType call — DecoWeaver always discovers closed generic
+       // service registrations, so the closing type argument is known at generation time).
+       // Constructor dependencies are still resolved at runtime via ActivatorUtilities,
+       // exactly like any other constructor-injected type in .NET DI.
+       return (IRepository<User>)ActivatorUtilities.CreateInstance(sp, typeof(CachingRepository<User>), impl);
    });
    ```
 
-3. **Runtime type closing for each registered type**:
-   - `IRepository<User>` registration → `CachingRepository<User>` (closed at runtime)
-   - `IRepository<Product>` registration → `CachingRepository<Product>` (closed at runtime)
-   - Each closed registration gets its own interceptor
+3. **Compile-time type closing for each registered type**:
+   - `IRepository<User>` registration → `CachingRepository<User>` (closed by the generator, emitted as a literal `typeof(CachingRepository<User>)`)
+   - `IRepository<Product>` registration → `CachingRepository<Product>` (closed by the generator, emitted as a literal `typeof(CachingRepository<Product>)`)
+   - Each closed registration gets its own interceptor, with its own already-closed decorator types — no reflection-based generic closing at runtime, and no Native AOT/trimming warnings
 
 ## Common Patterns
 
@@ -454,7 +455,7 @@ public class LoggingRepository<T> : IRepository<T> where T : class
     }
 }
 
-[DecoratedBy<LoggingRepository<>>]
+[DecoratedBy(typeof(LoggingRepository<>))]
 public class Repository<T> : IRepository<T> where T : class { }
 ```
 
@@ -490,7 +491,7 @@ public class CachingRepository<T> : IRepository<T>
     }
 }
 
-[DecoratedBy<CachingRepository<>>]
+[DecoratedBy(typeof(CachingRepository<>))]
 public class Repository<T> : IRepository<T>
     where T : class, IEntity { }
 ```
@@ -552,7 +553,7 @@ public class MetricsRepository<T> : IRepository<T> where T : class
     }
 }
 
-[DecoratedBy<MetricsRepository<>>]
+[DecoratedBy(typeof(MetricsRepository<>))]
 public class Repository<T> : IRepository<T> where T : class { }
 ```
 
@@ -560,17 +561,17 @@ public class Repository<T> : IRepository<T> where T : class { }
 
 ### No Partially Closed Generics
 
-DecoWeaver doesn't support partially closing generic types:
+DecoWeaver doesn't support partially closing generic types. There is no C# syntax — not even `typeof()` — that can express a partially-closed generic type reference at all, so this isn't just unsupported by DecoWeaver, it can't be written:
 
 ```csharp
-// ❌ Not supported: Partially closed generic
-[DecoratedBy<CachingKeyValueStore<string, >>]
+// ❌ Not expressible in C#: a partially closed generic type reference
+// (illustrative only — this does not compile with any attribute form)
 public class KeyValueStore<TValue> : IKeyValueStore<string, TValue> { }
 
-// ✅ Workaround: Create a new open generic
+// ✅ Workaround: Create a new open generic with the fixed argument baked in
 public class StringKeyValueStore<TValue> : IKeyValueStore<string, TValue> { }
 
-[DecoratedBy<CachingStringKeyValueStore<>>]
+[DecoratedBy(typeof(CachingStringKeyValueStore<>))]
 public class StringKeyValueStore<TValue> { }
 ```
 
@@ -583,7 +584,7 @@ DecoWeaver requires closed generic registration syntax:
 services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 
 // ✅ Closed generic registration - intercepted and decorated:
-[DecoratedBy<CachingRepository<>>]
+[DecoratedBy(typeof(CachingRepository<>))]
 public class Repository<T> : IRepository<T> { }
 
 services.AddScoped<IRepository<User>, Repository<User>>();

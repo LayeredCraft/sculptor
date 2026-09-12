@@ -32,7 +32,7 @@ namespace LayeredCraft.DecoWeaver.Generated
             {
                 var current = (global::DecoWeaver.Sample.IRepository<global::Customer>)sp.GetRequiredKeyedService<global::DecoWeaver.Sample.IRepository<global::Customer>>(key)!;
                 // Compose decorators (innermost to outermost)
-                current = (global::DecoWeaver.Sample.IRepository<global::Customer>)DecoratorFactory.Create(sp, typeof(global::DecoWeaver.Sample.IRepository<global::Customer>), typeof(global::DecoWeaver.Sample.AuditDecorator), current);
+                current = (global::DecoWeaver.Sample.IRepository<global::Customer>)ActivatorUtilities.CreateInstance(sp, typeof(global::DecoWeaver.Sample.AuditDecorator), current)!;
                 return current;
             });
             return services;
@@ -52,22 +52,6 @@ namespace LayeredCraft.DecoWeaver.Generated
                 // Return a tuple that preserves the actual key object (not its string representation)
                 // This ensures distinct object keys create distinct nested keys
                 return (userKey, serviceType, implementationType);
-            }
-        }
-
-        private static class DecoratorFactory
-        {
-            public static object Create(IServiceProvider sp, Type serviceType, Type decoratorOpenOrClosed, object inner)
-            {
-                var closedType = CloseIfNeeded(decoratorOpenOrClosed, serviceType);
-                return ActivatorUtilities.CreateInstance(sp, closedType, inner)!;
-            }
-
-            private static Type CloseIfNeeded(Type t, Type serviceType)
-            {
-                if (!t.IsGenericTypeDefinition) return t;
-                var args = serviceType.IsGenericType ? serviceType.GetGenericArguments() : Type.EmptyTypes;
-                return t.MakeGenericType(args);
             }
         }
 

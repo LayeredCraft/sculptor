@@ -50,7 +50,7 @@ namespace LayeredCraft.DecoWeaver.Generated
                 var current = ({{ reg.service_fqn }})sp.GetRequiredKeyedService<{{ reg.service_fqn }}>(nestedKey)!;
                 // Compose decorators (innermost to outermost)
 {{- for decorator in reg.decorators }}
-                current = ({{ reg.service_fqn }})DecoratorFactory.Create(sp, typeof({{ reg.service_fqn }}), typeof({{ decorator }}), current);
+                current = ({{ reg.service_fqn }})ActivatorUtilities.CreateInstance(sp, typeof({{ decorator }}), current)!;
 {{- end }}
                 return current;
             });
@@ -75,7 +75,7 @@ namespace LayeredCraft.DecoWeaver.Generated
                 var current = ({{ reg.service_fqn }})sp.GetRequiredKeyedService<{{ reg.service_fqn }}>(key)!;
                 // Compose decorators (innermost to outermost)
 {{- for decorator in reg.decorators }}
-                current = ({{ reg.service_fqn }})DecoratorFactory.Create(sp, typeof({{ reg.service_fqn }}), typeof({{ decorator }}), current);
+                current = ({{ reg.service_fqn }})ActivatorUtilities.CreateInstance(sp, typeof({{ decorator }}), current)!;
 {{- end }}
                 return current;
             });
@@ -102,22 +102,6 @@ namespace LayeredCraft.DecoWeaver.Generated
                 // Return a tuple that preserves the actual key object (not its string representation)
                 // This ensures distinct object keys create distinct nested keys
                 return (userKey, serviceType, implementationType);
-            }
-        }
-
-        private static class DecoratorFactory
-        {
-            public static object Create(IServiceProvider sp, Type serviceType, Type decoratorOpenOrClosed, object inner)
-            {
-                var closedType = CloseIfNeeded(decoratorOpenOrClosed, serviceType);
-                return ActivatorUtilities.CreateInstance(sp, closedType, inner)!;
-            }
-
-            private static Type CloseIfNeeded(Type t, Type serviceType)
-            {
-                if (!t.IsGenericTypeDefinition) return t;
-                var args = serviceType.IsGenericType ? serviceType.GetGenericArguments() : Type.EmptyTypes;
-                return t.MakeGenericType(args);
             }
         }
 
